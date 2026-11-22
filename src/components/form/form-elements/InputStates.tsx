@@ -62,7 +62,7 @@ export default function InputStates() {
           <Label>Email</Label>
           <Input
             type="text"
-            value="disabled@example.com"
+            value="disabled@gmail.com"
             disabled={true}
             placeholder="Disabled email"
           />
