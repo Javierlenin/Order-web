@@ -16,7 +16,7 @@ export default function SidebarWidget() {
       </p>
       <div className="space-y-2">
         <a
-          href="mailto:your-email@example.com"
+          href="mailto:your-email@gmail.com"
           className="block rounded-lg bg-brand-500 px-4 py-2 font-medium text-white hover:bg-brand-600"
         >
           waqasgul369@gmail.com

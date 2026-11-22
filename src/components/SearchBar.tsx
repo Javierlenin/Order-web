@@ -3,15 +3,22 @@ import './SearchBar.css';
 interface SearchBarProps {
     value: string;
     onChange: (value: string) => void;
+    placeholder?: string;
+    label?: string;
 }
 
-export const SearchBar = ({ value, onChange }: SearchBarProps) => {
+export const SearchBar = ({
+    value,
+    onChange,
+    placeholder = "Buscar por nombre o correo",
+    label = "Buscar usuarios",
+}: SearchBarProps) => {
   return (
     <input
         type="search"
         className="search-bar"
-        placeholder="Buscar por nombre o correo"
-        aria-label="Buscar usuarios"
+        placeholder={placeholder}
+        aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
     />
