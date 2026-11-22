@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import "./UsersPage.css";
 import { SearchBar } from "../components/SearchBar";
 import { UserList } from "../components/UserList";
 import type { User } from "../types/user";
+import { clearSession } from "../services/authSession";
 import { getUsers } from "../services/userService";
 
 export const UsersPage = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -54,13 +57,25 @@ export const UsersPage = () => {
   return (
     <section className="users-page">
       <div className="users-page-header">
-        <h2 className="users-page-title">Usuarios</h2>
-        {!isLoading && !errorMessage && (
+        <div className="users-page-heading">
+          <h2 className="users-page-title">Usuarios</h2>
+          {!isLoading && !errorMessage && (
             <p className="users-page-count">
-                {filteredUsers.length}
-                {filteredUsers.length === 1 ? " resultado" : " resultados"}
+              {filteredUsers.length}
+              {filteredUsers.length === 1 ? " resultado" : " resultados"}
             </p>
-        )}
+          )}
+        </div>
+        <button
+          type="button"
+          className="users-page-logout"
+          onClick={() => {
+            clearSession();
+            navigate("/signin", { replace: true });
+          }}
+        >
+          Cerrar sesión
+        </button>
       </div>
       <SearchBar value={searchTerm} onChange={setSearchTerm} />
         {renderContent()}

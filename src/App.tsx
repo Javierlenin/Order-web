@@ -1,24 +1,13 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router";
-import SignIn from "./page/AuthPages/SignIn";
-import SignUp from "./page/AuthPages/SignUp";
+import { BrowserRouter as Router, Navigate, Routes, Route } from "react-router";
+import { RequireAuth } from "./components/RequireAuth";
+import { LoginPage } from "./page/LoginPage";
+import { RegisterPage } from "./page/RegisterPage";
 import NotFound from "./page/OtherPage/NotFound";
-import UserProfiles from "./page/UserProfiles";
-import Videos from "./page/UiElements/Videos";
-import Images from "./page/UiElements/Images";
-import Alerts from "./page/UiElements/Alerts";
-import Badges from "./page/UiElements/Badges";
-import Avatars from "./page/UiElements/Avatars";
-import Buttons from "./page/UiElements/Buttons";
-import LineChart from "./page/Charts/LineChart";
-import BarChart from "./page/Charts/BarChart";
-import Calendar from "./page/Calendar";
-import BasicTables from "./page/Tables/BasicTables";
-import FormElements from "./page/Forms/FormElements";
-import Blank from "./page/Blank";
 import AppLayout from "./components/layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
-import Home from "./page/Dashboard/Home";
 import { UsersPage } from "./page/UsersPage";
+import { RolesPage } from "./page/RolesPage";
+import { ModulePage } from "./page/ModulePage";
 
 export default function App() {
   return (
@@ -26,25 +15,20 @@ export default function App() {
       <Router>
         <ScrollToTop />
         <Routes>
-          <Route element={<AppLayout />}>
-            <Route index path="/" element={<Home />} />
-            <Route path="/profile" element={<UserProfiles />} />
-            <Route path="/users" element={<UsersPage />} />
-            <Route path="/calendar" element={<Calendar />} />
-            <Route path="/blank" element={<Blank />} />
-            <Route path="/form-elements" element={<FormElements />} />
-            <Route path="/basic-tables" element={<BasicTables />} />
-            <Route path="/alerts" element={<Alerts />} />
-            <Route path="/avatars" element={<Avatars />} />
-            <Route path="/badge" element={<Badges />} />
-            <Route path="/buttons" element={<Buttons />} />
-            <Route path="/images" element={<Images />} />
-            <Route path="/videos" element={<Videos />} />
-            <Route path="/line-chart" element={<LineChart />} />
-            <Route path="/bar-chart" element={<BarChart />} />
+          <Route element={<RequireAuth />}>
+            <Route element={<AppLayout />}>
+              <Route index path="/" element={<Navigate to="/pedidos" replace />} />
+              <Route path="/users" element={<UsersPage />} />
+              <Route path="/roles" element={<RolesPage />} />
+              <Route path="/clientes" element={<ModulePage title="Clientes" />} />
+              <Route path="/pedidos" element={<ModulePage title="Pedidos" />} />
+              <Route path="/categorias" element={<ModulePage title="Categorías" />} />
+              <Route path="/productos" element={<ModulePage title="Productos" />} />
+              <Route path="/reportes" element={<ModulePage title="Reportes" />} />
+            </Route>
           </Route>
-          <Route path="/signin" element={<SignIn />} />
-          <Route path="/signup" element={<SignUp />} />
+          <Route path="/signin" element={<LoginPage />} />
+          <Route path="/signup" element={<RegisterPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
