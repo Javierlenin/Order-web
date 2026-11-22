@@ -10,9 +10,27 @@
 
 .users-page-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   margin: 2rem 0 1rem;
+}
+
+.users-page-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.users-page-logout {
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--color-primary);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
 }
 
 .users-page-title {
