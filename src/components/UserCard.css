@@ -1,0 +1,36 @@
+.user-card {
+  padding: 1.5rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.user-card-email {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.user-card-name {
+  margin-top: 0.25rem;
+  font-size: 1.125rem;
+}
+
+.user-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1.25rem;
+}
+
+.user-card-role {
+  padding: 2px 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-primary);
+  background: #e4f1f4;
+  border-radius: 999px;
+}
+
+.user-card-status {
+  font-size: 0.875rem;
+  font-weight: 600;
+}

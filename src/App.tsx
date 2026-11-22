@@ -18,6 +18,7 @@ import Blank from "./page/Blank";
 import AppLayout from "./components/layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./page/Dashboard/Home";
+import { UsersPage } from "./page/UsersPage";
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route index path="/" element={<Home />} />
             <Route path="/profile" element={<UserProfiles />} />
+            <Route path="/users" element={<UsersPage />} />
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/blank" element={<Blank />} />
             <Route path="/form-elements" element={<FormElements />} />
