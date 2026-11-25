@@ -9,7 +9,8 @@ import { UsersPage } from "./page/UsersPage";
 import { RolesPage } from "./page/RolesPage";
 import { ModulePage } from "./page/ModulePage";
 import { ReportsPage } from "./page/ReportsPage";
-import { InventoryAdjustmentsPage } from "./page/InventoryAdjustmentsPage";
+import { InventoryMovementsPage } from "./page/InventoryMovementsPage";
+
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
               <Route path="/pedidos" element={<ModulePage title="Pedidos" />} />
               <Route path="/categorias" element={<ModulePage title="Categorías" />} />
               <Route path="/productos" element={<ModulePage title="Productos" />} />
+
               <Route path="/ajustes-inventario" element={<InventoryAdjustmentsPage />} />
               <Route path="/reportes" element={<ReportsPage />} />
             </Route>
