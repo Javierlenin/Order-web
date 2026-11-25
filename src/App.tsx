@@ -11,6 +11,7 @@ import { ModulePage } from "./page/ModulePage";
 import { ReportsPage } from "./page/ReportsPage";
 import { InventoryMovementsPage } from "./page/InventoryMovementsPage";
 
+
 export default function App() {
   return (
     <>
@@ -26,7 +27,8 @@ export default function App() {
               <Route path="/pedidos" element={<ModulePage title="Pedidos" />} />
               <Route path="/categorias" element={<ModulePage title="Categorías" />} />
               <Route path="/productos" element={<ModulePage title="Productos" />} />
-              <Route path="/movimientos-inventario" element={<InventoryMovementsPage />} />
+
+              <Route path="/ajustes-inventario" element={<InventoryAdjustmentsPage />} />
               <Route path="/reportes" element={<ReportsPage />} />
             </Route>
           </Route>
