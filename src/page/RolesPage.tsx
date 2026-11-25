@@ -1,16 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import "./UsersPage.css";
 import "../components/UserList.css";
 import "../components/UserCard.css";
 import { SearchBar } from "../components/SearchBar";
 import type { Role } from "../types/role";
-import { getRoles } from "../services/roleService";
+import { createRole, getRoles } from "../services/roleService";
+import { Modal } from "../components/ui/modal";
+import { useModal } from "../components/hooks/useModal";
 
 export const RolesPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [formError, setFormError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const { isOpen, openModal, closeModal } = useModal();
 
   useEffect(() => {
     const loadRoles = async () => {
@@ -30,6 +37,37 @@ export const RolesPage = () => {
   const filteredRoles = roles.filter((role) =>
     `${role.name} ${role.description ?? ""}`.toLowerCase().includes(normalizedTerm),
   );
+
+  const resetForm = () => {
+    setName("");
+    setDescription("");
+    setFormError("");
+  };
+
+  const handleClose = () => {
+    resetForm();
+    closeModal();
+  };
+
+  const handleCreateRole = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError("");
+    setIsSaving(true);
+
+    try {
+      const createdRole = await createRole({
+        name: name.trim(),
+        description: description.trim(),
+        status: true,
+      });
+      setRoles((currentRoles) => [createdRole, ...currentRoles]);
+      handleClose();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "No se pudo crear el rol.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const renderContent = () => {
     if (isLoading) {
@@ -75,6 +113,9 @@ export const RolesPage = () => {
             </p>
           )}
         </div>
+        <button type="button" className="users-page-new" onClick={openModal}>
+          Nuevo rol
+        </button>
       </div>
       <SearchBar
         value={searchTerm}
@@ -83,6 +124,26 @@ export const RolesPage = () => {
         label="Buscar roles"
       />
       {renderContent()}
+      <Modal isOpen={isOpen} onClose={handleClose} className="record-modal">
+        <form className="record-form" onSubmit={handleCreateRole}>
+          <h3 className="record-form-title">Nuevo rol</h3>
+          <label>
+            Nombre
+            <input value={name} onChange={(event) => setName(event.target.value)} required />
+          </label>
+          <label>
+            Descripción
+            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} />
+          </label>
+          {formError && <p className="users-page-error" role="alert">{formError}</p>}
+          <div className="record-form-actions">
+            <button type="button" className="users-page-logout" onClick={handleClose}>Cancelar</button>
+            <button type="submit" className="users-page-new" disabled={isSaving}>
+              {isSaving ? "Guardando..." : "Guardar"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </section>
   );
 };
