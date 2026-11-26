@@ -1,0 +1,192 @@
+.orders-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.orders-toolbar .search-bar {
+  margin-bottom: 0;
+}
+
+.orders-primary,
+.orders-secondary,
+.orders-danger,
+.orders-ghost {
+  padding: 0.625rem 0.875rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.orders-primary {
+  color: #ffffff;
+  background: var(--color-primary);
+  border: 0;
+}
+
+.orders-secondary,
+.orders-ghost {
+  color: var(--color-primary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+}
+
+.orders-danger {
+  color: #ffffff;
+  background: var(--color-danger);
+  border: 0;
+}
+
+.orders-primary:disabled,
+.orders-secondary:disabled,
+.orders-danger:disabled,
+.orders-ghost:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.orders-form,
+.orders-card {
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.orders-form h3,
+.orders-card h3 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.orders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.orders-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.orders-field-wide {
+  grid-column: 1 / -1;
+}
+
+.orders-field input,
+.orders-field select,
+.orders-field textarea {
+  padding: 0.625rem 0.875rem;
+  font: inherit;
+  font-weight: 400;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.orders-field input:focus,
+.orders-field select:focus,
+.orders-field textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(15, 92, 110, 0.15);
+}
+
+.orders-field input[readonly] {
+  color: var(--color-muted);
+  background: #f4f6f8;
+}
+
+.orders-lines {
+  width: 100%;
+  margin-top: 1rem;
+  border-collapse: collapse;
+}
+
+.orders-lines th,
+.orders-lines td {
+  padding: 0.5rem;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.orders-lines th {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.orders-lines input,
+.orders-lines select {
+  width: 100%;
+  min-width: 6rem;
+  padding: 0.5rem 0.625rem;
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.orders-shortage {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.orders-totals {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+  font-weight: 600;
+}
+
+.orders-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.orders-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.orders-status {
+  padding: 0.2rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: #e4f1f4;
+  border-radius: 999px;
+}
+
+.orders-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin-top: 0.75rem;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.orders-notes {
+  margin-top: 0.75rem;
+  color: var(--color-muted);
+}
+
+.orders-scroll {
+  overflow-x: auto;
+}
