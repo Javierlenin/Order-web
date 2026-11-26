@@ -8,6 +8,7 @@ import { clearSession, getSession } from "../services/authSession";
 import {
   changeOrderStatus,
   createOrder,
+  deleteOrder,
   getOrderCustomers,
   getOrderProducts,
   getOrders,
@@ -131,6 +132,10 @@ const buildOrder = (form: OrderForm, products: OrderProduct[]): NewOrder | strin
       return "El producto no puede repetirse en el pedido";
     }
 
+    if (quantity > product.stock) {
+      return "No hay existencias suficientes para confirmar el pedido";
+    }
+
     productIds.add(productId);
     details.push({ productId, quantity });
   }
@@ -164,6 +169,7 @@ export const OrdersPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [statusError, setStatusError] = useState("");
   const [statusOrderId, setStatusOrderId] = useState<number | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<number | null>(null);
 
   const createLine = (productId = "", quantity = "1"): DraftLine => ({
     key: nextKey.current++,
@@ -249,15 +255,17 @@ export const OrdersPage = () => {
       return;
     }
 
-    const payload = buildOrder(form, products);
-    if (typeof payload === "string") {
-      setFormError(payload);
-      return;
-    }
-
     setFormError("");
     setIsSaving(true);
     try {
+      const latestProducts = await getOrderProducts();
+      setProducts(latestProducts);
+      const payload = buildOrder(form, latestProducts);
+      if (typeof payload === "string") {
+        setFormError(payload);
+        return;
+      }
+
       if (form.orderId === null) {
         await createOrder(payload);
       } else {
@@ -346,6 +354,34 @@ export const OrdersPage = () => {
     }
   };
 
+  const removeOrder = async (order: Order) => {
+    if (!window.confirm(`¿Eliminar el pedido ${order.orderNumber}?`)) {
+      return;
+    }
+
+    setStatusError("");
+    setDeletingOrderId(order.id);
+
+    try {
+      await deleteOrder(order.id);
+      setOrders(await getOrders());
+      if (form?.orderId === order.id) {
+        setForm(null);
+      }
+    } catch (error) {
+      if (isUnauthorized(error)) {
+        clearSession();
+        navigate("/signin", { replace: true });
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : "No se logró eliminar el pedido";
+      setStatusError(`Pedido ${order.orderNumber}: ${message}`);
+    } finally {
+      setDeletingOrderId(null);
+    }
+  };
+
   const previewTotal = form
     ? roundMoney(form.lines.reduce((sum, line) => sum + (lineAmount(line, products) ?? 0), 0))
     : 0;
@@ -371,79 +407,81 @@ export const OrdersPage = () => {
       );
     }
 
-    return filteredOrders.map((order) => (
-      <article key={order.id} className="orders-card">
-        <div className="orders-card-header">
-          <h3>Pedido {order.orderNumber}</h3>
-          <span className="orders-status">{STATUS_LABEL[order.status]}</span>
-        </div>
-        <div className="orders-meta">
-          <span>Fecha {formatDate(order.orderDate)}</span>
-          <span>Cliente {order.customerName}</span>
-          <span>Responsable {order.userName}</span>
-        </div>
-        <div className="orders-scroll">
-          <table className="orders-lines">
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Cantidad</th>
-                <th>Precio</th>
-                <th>Stock</th>
-                <th>Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {order.details.map((detail) => {
-                const stock = products.find((product) => product.id === detail.productId)?.stock;
-                const shortage = order.status === "PENDIENTE" && stock !== undefined && detail.quantity > stock;
+    return (
+      <div className="orders-scroll">
+        <table className="orders-list">
+          <thead>
+            <tr>
+              <th>Número pedido</th>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Total</th>
+              <th>Opciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredOrders.map((order) => {
+              const rowBusy = statusOrderId === order.id || deletingOrderId === order.id;
+              const nextStatuses = ORDER_TRANSITIONS[order.status];
 
-                return (
-                  <tr key={detail.id}>
-                    <td>
-                      {detail.codeProduct} · {detail.productName}
-                    </td>
-                    <td className={shortage ? "orders-shortage" : undefined}>{detail.quantity}</td>
-                    <td>{money(detail.unitPrice)}</td>
-                    <td className={shortage ? "orders-shortage" : undefined}>{stock ?? "—"}</td>
-                    <td>{money(detail.subtotal)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="orders-totals">
-          <span>Subtotal {money(order.subtotal)}</span>
-          {order.tax > 0 && <span>Impuesto {money(order.tax)}</span>}
-          <span>Total {money(order.total)}</span>
-        </div>
-        {order.notes && <p className="orders-notes">{order.notes}</p>}
-        <div className="orders-actions">
-          {order.status === "PENDIENTE" && (
-            <button
-              type="button"
-              className="orders-secondary"
-              onClick={() => openEdit(order)}
-              disabled={statusOrderId === order.id}
-            >
-              Editar
-            </button>
-          )}
-          {ORDER_TRANSITIONS[order.status].map((status) => (
-            <button
-              key={status}
-              type="button"
-              className={status === "CANCELADO" ? "orders-danger" : "orders-primary"}
-              onClick={() => applyStatus(order, status)}
-              disabled={statusOrderId === order.id}
-            >
-              {ACTION_LABEL[status]}
-            </button>
-          ))}
-        </div>
-      </article>
-    ));
+              return (
+                <tr key={order.id}>
+                  <td>{order.orderNumber}</td>
+                  <td>{formatDate(order.orderDate)}</td>
+                  <td>{order.customerName}</td>
+                  <td>{money(order.total)}</td>
+                  <td>
+                    <div className="orders-options">
+                      <button
+                        type="button"
+                        className="orders-secondary"
+                        onClick={() => {
+                          if (order.status !== "PENDIENTE") {
+                            setStatusError(`Pedido ${order.orderNumber}: Solo se puede editar un pedido pendiente`);
+                            return;
+                          }
+
+                          openEdit(order);
+                        }}
+                        disabled={rowBusy}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        className="orders-danger"
+                        onClick={() => removeOrder(order)}
+                        disabled={rowBusy}
+                      >
+                        Eliminar
+                      </button>
+                      <select
+                        aria-label={`Cambiar estado del pedido ${order.orderNumber}`}
+                        value=""
+                        onChange={(event) => {
+                          const nextStatus = event.target.value as OrderStatus;
+                          if (nextStatus) {
+                            void applyStatus(order, nextStatus);
+                          }
+                        }}
+                        disabled={rowBusy || nextStatuses.length === 0}
+                      >
+                        <option value="">{nextStatuses.length === 0 ? "Sin cambios" : "Estado"}</option>
+                        {nextStatuses.map((status) => (
+                          <option key={status} value={status}>
+                            {ACTION_LABEL[status]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   return (
@@ -565,7 +603,7 @@ export const OrdersPage = () => {
                             .filter((item) => item.status || String(item.id) === line.productId)
                             .map((item) => (
                               <option key={item.id} value={item.id} disabled={taken.has(String(item.id))}>
-                                {item.codeProduct} · {item.name}
+                                {item.codeProduct} · {item.name} · Stock {item.stock}
                                 {item.status ? "" : " (inactivo)"}
                               </option>
                             ))}
@@ -614,7 +652,7 @@ export const OrdersPage = () => {
             <span>Total {money(previewTotal)}</span>
           </div>
           <p className="orders-notes">
-            El precio sale del catálogo. Al guardar, el servidor recalcula subtotales y total. La confirmación valida existencias y descuenta el stock.
+            El precio sale del catálogo. Al guardar, el servidor recalcula subtotales y total. La cantidad no puede superar el stock; al confirmar, el servidor vuelve a validar existencias y descuenta el stock.
           </p>
           {formError && (
             <p className="users-page-status users-page-error" role="alert">
