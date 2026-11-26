@@ -1,1 +1,3 @@
-export { CategoriesPage } from "./AdministrationPages";
+import { ModulePage } from "./ModulePage";
+
+export const CategoriesPage = () => <ModulePage title="Categorías" />;

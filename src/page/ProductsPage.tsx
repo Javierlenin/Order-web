@@ -1,1 +1,3 @@
-export { ProductsPage } from "./AdministrationPages";
+import { ModulePage } from "./ModulePage";
+
+export const ProductsPage = () => <ModulePage title="Productos" />;

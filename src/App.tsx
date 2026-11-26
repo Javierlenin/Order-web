@@ -10,7 +10,7 @@ import { RolesPage } from "./page/RolesPage";
 import { ModulePage } from "./page/ModulePage";
 import { OrdersPage } from "./page/OrdersPage";
 import { ReportsPage } from "./page/ReportsPage";
-import { InventoryMovementsPage } from "./page/InventoryMovementsPage";
+import { InventoryAdjustmentsPage } from "./page/InventoryAdjustmentsPage";
 
 
 export default function App() {
