@@ -26,6 +26,7 @@ export const ReportList = ({ movements }: ReportListProps) => {
         <thead>
           <tr>
             <th>Fecha</th>
+            <th>Descripción</th>
             <th>Tipo</th>
             <th>Cantidad</th>
             <th>Stock anterior</th>
@@ -37,6 +38,7 @@ export const ReportList = ({ movements }: ReportListProps) => {
           {movements.map((movement) => (
             <tr key={`${movement.origin}-${movement.id}`}>
               <td>{formatDate(movement.occurredAt)}</td>
+              <td className="reports-description">{movement.description}</td>
               <td>{TYPE_LABEL[movement.type]}</td>
               <td>{movement.quantity}</td>
               <td>{movement.stockBefore}</td>

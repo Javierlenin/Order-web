@@ -22,6 +22,14 @@ export const getInventoryAdjustments = async (): Promise<InventoryAdjustment[]> 
   }
 };
 
+export const deleteInventoryAdjustment = async (id: number): Promise<void> => {
+  try {
+    await apiClient.delete(`/inventory-adjustments/${id}`);
+  } catch (error) {
+    throw new Error(readApiError(error, "No se logró eliminar el ajuste. Intente de nuevo más tarde"));
+  }
+};
+
 export const createInventoryAdjustment = async (
   adjustment: NewInventoryAdjustment,
 ): Promise<InventoryAdjustment> => {

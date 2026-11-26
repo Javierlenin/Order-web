@@ -4,8 +4,13 @@ import { useNavigate } from "react-router";
 import "./UsersPage.css";
 import "./OrdersPage.css";
 import { SearchBar } from "../components/SearchBar";
+import { Modal } from "../components/ui/modal";
 import { clearSession, getSession } from "../services/authSession";
-import { createInventoryAdjustment, getInventoryAdjustments } from "../services/inventoryAdjustmentService";
+import {
+  createInventoryAdjustment,
+  deleteInventoryAdjustment,
+  getInventoryAdjustments,
+} from "../services/inventoryAdjustmentService";
 import { getProducts } from "../services/productService";
 import { getUsers } from "../services/userService";
 import {
@@ -118,6 +123,9 @@ export const InventoryAdjustmentsPage = () => {
   const [form, setForm] = useState<AdjustmentForm | null>(null);
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [viewing, setViewing] = useState<InventoryAdjustment | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const createLine = (productId = "", quantity = "1"): DraftLine => ({
     key: nextKey.current++,
@@ -225,6 +233,7 @@ export const InventoryAdjustmentsPage = () => {
     }
 
     setFormError("");
+    setActionError("");
     setIsSaving(true);
 
     try {
@@ -243,6 +252,36 @@ export const InventoryAdjustmentsPage = () => {
       setFormError(error instanceof Error ? error.message : "No se logró registrar el ajuste. Intente de nuevo más tarde");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const removeAdjustment = async (adjustment: InventoryAdjustment) => {
+    if (!window.confirm(`¿Eliminar el ajuste ${adjustment.id}? Se revertirá su efecto sobre el stock.`)) {
+      return;
+    }
+
+    setActionError("");
+    setDeletingId(adjustment.id);
+
+    try {
+      await deleteInventoryAdjustment(adjustment.id);
+      const [nextAdjustments, nextProducts] = await Promise.all([getInventoryAdjustments(), getProducts()]);
+      setAdjustments(nextAdjustments);
+      setProducts(nextProducts);
+      if (viewing?.id === adjustment.id) {
+        setViewing(null);
+      }
+    } catch (error) {
+      if (isUnauthorized(error)) {
+        clearSession();
+        navigate("/signin", { replace: true });
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : "No se logró eliminar el ajuste. Intente de nuevo más tarde";
+      setActionError(`Ajuste ${adjustment.id}: ${message}`);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -267,43 +306,48 @@ export const InventoryAdjustmentsPage = () => {
       );
     }
 
-    return filteredAdjustments.map((adjustment) => (
-      <article key={adjustment.id} className="orders-card">
-        <div className="orders-card-header">
-          <h3>Ajuste {adjustment.id}</h3>
-          <span className="orders-status">{TYPE_LABEL[adjustment.adjustmentType]}</span>
-        </div>
-        <div className="orders-meta">
-          <span>Fecha {formatDate(adjustment.createdAt)}</span>
-          <span>Responsable {adjustment.userName}</span>
-        </div>
-        {adjustment.reason && <p className="orders-notes">{adjustment.reason}</p>}
-        <div className="orders-scroll">
-          <table className="orders-lines">
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Cantidad</th>
-                <th>Stock anterior</th>
-                <th>Stock resultante</th>
+    return (
+      <div className="orders-scroll">
+        <table className="orders-list">
+          <thead>
+            <tr>
+              <th>Ajuste</th>
+              <th>Fecha</th>
+              <th>Tipo</th>
+              <th>Responsable</th>
+              <th>Motivo</th>
+              <th>Opciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredAdjustments.map((adjustment) => (
+              <tr key={adjustment.id}>
+                <td>{adjustment.id}</td>
+                <td>{formatDate(adjustment.createdAt)}</td>
+                <td>{TYPE_LABEL[adjustment.adjustmentType]}</td>
+                <td>{adjustment.userName}</td>
+                <td className="orders-reason">{adjustment.reason || "—"}</td>
+                <td>
+                  <div className="orders-options">
+                    <button type="button" className="orders-secondary" onClick={() => setViewing(adjustment)}>
+                      Ver
+                    </button>
+                    <button
+                      type="button"
+                      className="orders-danger"
+                      onClick={() => removeAdjustment(adjustment)}
+                      disabled={deletingId === adjustment.id}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {adjustment.details.map((detail) => (
-                <tr key={detail.id}>
-                  <td>
-                    {detail.codeProduct} · {detail.productName}
-                  </td>
-                  <td>{detail.quantity}</td>
-                  <td>{detail.stockBefore}</td>
-                  <td>{detail.stockAfter}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </article>
-    ));
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   return (
@@ -494,7 +538,51 @@ export const InventoryAdjustmentsPage = () => {
         </form>
       )}
 
+      {actionError && (
+        <p className="users-page-status users-page-error" role="alert">
+          {actionError}
+        </p>
+      )}
+
       {renderAdjustments()}
+
+      <Modal isOpen={viewing !== null} onClose={() => setViewing(null)} className="adjustment-view-modal">
+        {viewing && (
+          <div className="adjustment-view">
+            <h3>Ajuste {viewing.id}</h3>
+            <div className="adjustment-view-meta">
+              <span>Fecha {formatDate(viewing.createdAt)}</span>
+              <span>Tipo {TYPE_LABEL[viewing.adjustmentType]}</span>
+              <span>Responsable {viewing.userName}</span>
+              <span>Motivo {viewing.reason || "Sin motivo"}</span>
+            </div>
+            <div className="orders-scroll">
+              <table className="orders-lines">
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Stock anterior</th>
+                    <th>Stock resultante</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {viewing.details.map((detail) => (
+                    <tr key={detail.id}>
+                      <td>
+                        {detail.codeProduct} · {detail.productName}
+                      </td>
+                      <td>{detail.quantity}</td>
+                      <td>{detail.stockBefore}</td>
+                      <td>{detail.stockAfter}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Modal>
     </section>
   );
 };
