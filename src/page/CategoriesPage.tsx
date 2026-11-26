@@ -2,10 +2,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import "./UsersPage.css";
 import "../components/UserList.css";
 import "../components/UserCard.css";
+import { CardActions } from "../components/CardActions";
 import { SearchBar } from "../components/SearchBar";
 import { Modal } from "../components/ui/modal";
 import { useModal } from "../components/hooks/useModal";
-import { createCategory, getCategories } from "../services/categoryService";
+import { createCategory, deleteCategory, getCategories, updateCategory } from "../services/categoryService";
 import type { Category } from "../types/category";
 
 export const CategoriesPage = () => {
@@ -13,11 +14,14 @@ export const CategoriesPage = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [actionError, setActionError] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState(true);
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const { isOpen, openModal, closeModal } = useModal();
 
   useEffect(() => {
@@ -42,6 +46,7 @@ export const CategoriesPage = () => {
   );
 
   const resetForm = () => {
+    setEditingCategory(null);
     setName("");
     setDescription("");
     setStatus(true);
@@ -53,7 +58,22 @@ export const CategoriesPage = () => {
     closeModal();
   };
 
-  const handleCreateCategory = async (event: FormEvent<HTMLFormElement>) => {
+  const openCreate = () => {
+    resetForm();
+    openModal();
+  };
+
+  const openEdit = (category: Category) => {
+    setEditingCategory(category);
+    setName(category.name);
+    setDescription(category.description ?? "");
+    setStatus(category.status);
+    setFormError("");
+    setActionError("");
+    openModal();
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedName = name.trim();
 
@@ -65,18 +85,48 @@ export const CategoriesPage = () => {
     setFormError("");
     setIsSaving(true);
 
+    const payload = {
+      name: trimmedName,
+      description: description.trim() || null,
+      status,
+    };
+
     try {
-      const createdCategory = await createCategory({
-        name: trimmedName,
-        description: description.trim() || null,
-        status,
-      });
-      setCategories((currentCategories) => [createdCategory, ...currentCategories]);
+      if (editingCategory) {
+        const updatedCategory = await updateCategory(editingCategory.id, payload);
+        setCategories((currentCategories) =>
+          currentCategories.map((category) => (category.id === updatedCategory.id ? updatedCategory : category)),
+        );
+      } else {
+        const createdCategory = await createCategory(payload);
+        setCategories((currentCategories) => [createdCategory, ...currentCategories]);
+      }
       handleClose();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "No se logró registrar la categoría");
+      setFormError(error instanceof Error ? error.message : "No se logró guardar la categoría");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (category: Category) => {
+    if (!window.confirm(`¿Eliminar la categoría ${category.name}?`)) {
+      return;
+    }
+
+    setActionError("");
+    setDeletingId(category.id);
+
+    try {
+      await deleteCategory(category.id);
+      setCategories((currentCategories) => currentCategories.filter((current) => current.id !== category.id));
+      if (editingCategory?.id === category.id) {
+        handleClose();
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No se logró eliminar la categoría");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -109,6 +159,12 @@ export const CategoriesPage = () => {
             <p className="user-card-email">{category.description || "Sin descripción"}</p>
             <div className="user-card-footer">
               <span className="user-card-status">{category.status ? "Activo" : "Inactivo"}</span>
+              <CardActions
+                label={category.name}
+                busy={deletingId === category.id}
+                onEdit={() => openEdit(category)}
+                onDelete={() => handleDelete(category)}
+              />
             </div>
           </article>
         ))}
@@ -128,7 +184,7 @@ export const CategoriesPage = () => {
             </p>
           )}
         </div>
-        <button type="button" className="users-page-new" onClick={openModal}>
+        <button type="button" className="users-page-new" onClick={openCreate}>
           Nueva categoría
         </button>
       </div>
@@ -138,10 +194,15 @@ export const CategoriesPage = () => {
         placeholder="Buscar por nombre"
         label="Buscar categorías"
       />
+      {actionError && (
+        <p className="users-page-error" role="alert">
+          {actionError}
+        </p>
+      )}
       {renderContent()}
       <Modal isOpen={isOpen} onClose={handleClose} className="record-modal">
-        <form className="record-form" onSubmit={handleCreateCategory}>
-          <h3 className="record-form-title">Nueva categoría</h3>
+        <form className="record-form" onSubmit={handleSubmit}>
+          <h3 className="record-form-title">{editingCategory ? "Editar categoría" : "Nueva categoría"}</h3>
           <label>
             Nombre
             <input value={name} onChange={(event) => setName(event.target.value)} maxLength={100} required autoFocus />

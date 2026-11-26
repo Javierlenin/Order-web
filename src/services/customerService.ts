@@ -30,3 +30,20 @@ export const createCustomer = async (customer: NewCustomer): Promise<Customer> =
     throw new Error(readApiError(error, "No se logró registrar el cliente"));
   }
 };
+
+export const updateCustomer = async (id: number, customer: NewCustomer): Promise<Customer> => {
+  try {
+    const response = await apiClient.put<Customer>(`/customers/${id}`, customer);
+    return response.data;
+  } catch (error) {
+    throw new Error(readApiError(error, "No se logró actualizar el cliente"));
+  }
+};
+
+export const deleteCustomer = async (id: number): Promise<void> => {
+  try {
+    await apiClient.delete(`/customers/${id}`);
+  } catch (error) {
+    throw new Error(readApiError(error, "No se logró eliminar el cliente"));
+  }
+};

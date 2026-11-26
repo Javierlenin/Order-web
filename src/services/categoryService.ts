@@ -30,3 +30,20 @@ export const createCategory = async (category: NewCategory): Promise<Category> =
     throw new Error(readApiError(error, "No se logró registrar la categoría"));
   }
 };
+
+export const updateCategory = async (id: number, category: NewCategory): Promise<Category> => {
+  try {
+    const response = await apiClient.put<Category>(`/categories/${id}`, category);
+    return response.data;
+  } catch (error) {
+    throw new Error(readApiError(error, "No se logró actualizar la categoría"));
+  }
+};
+
+export const deleteCategory = async (id: number): Promise<void> => {
+  try {
+    await apiClient.delete(`/categories/${id}`);
+  } catch (error) {
+    throw new Error(readApiError(error, "No se logró eliminar la categoría"));
+  }
+};
