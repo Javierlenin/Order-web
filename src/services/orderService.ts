@@ -37,6 +37,14 @@ export const changeOrderStatus = (id: number, status: OrderStatus): Promise<Orde
     "No se logró cambiar el estado del pedido",
   );
 
+export const deleteOrder = async (id: number): Promise<void> => {
+  try {
+    await apiClient.delete(`/orders/${id}`);
+  } catch (error) {
+    throw new Error(readApiError(error, "No se logró eliminar el pedido"));
+  }
+};
+
 export const getOrderCustomers = (): Promise<OrderCustomer[]> =>
   request(
     () => apiClient.get<OrderCustomer[]>("/customers"),
