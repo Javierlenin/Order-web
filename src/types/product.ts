@@ -11,3 +11,12 @@ export interface Product {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface NewProduct {
+  categoryId: number;
+  codeProduct: string;
+  name: string;
+  description: string | null;
+  price: number;
+  status: boolean;
+}

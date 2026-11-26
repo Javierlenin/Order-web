@@ -55,3 +55,39 @@
   gap: 1rem;
   margin-bottom: 1.25rem;
 }
+
+.reports-scroll {
+  overflow-x: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.reports-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.reports-table th,
+.reports-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.reports-table th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.reports-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.reports-description {
+  white-space: normal;
+  min-width: 12rem;
+  max-width: 22rem;
+}

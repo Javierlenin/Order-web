@@ -7,10 +7,12 @@ import AppLayout from "./components/layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import { UsersPage } from "./page/UsersPage";
 import { RolesPage } from "./page/RolesPage";
-import { ModulePage } from "./page/ModulePage";
+import { CustomersPage } from "./page/CustomersPage";
+import { CategoriesPage } from "./page/CategoriesPage";
+import { ProductsPage } from "./page/ProductsPage";
 import { OrdersPage } from "./page/OrdersPage";
 import { ReportsPage } from "./page/ReportsPage";
-import { InventoryMovementsPage } from "./page/InventoryMovementsPage";
+import { InventoryAdjustmentsPage } from "./page/InventoryAdjustmentsPage";
 
 
 export default function App() {
@@ -24,11 +26,12 @@ export default function App() {
               <Route index path="/" element={<Navigate to="/pedidos" replace />} />
               <Route path="/users" element={<UsersPage />} />
               <Route path="/roles" element={<RolesPage />} />
-              <Route path="/clientes" element={<ModulePage title="Clientes" />} />
+              <Route path="/clientes" element={<CustomersPage />} />
               <Route path="/pedidos" element={<OrdersPage />} />
-              <Route path="/categorias" element={<ModulePage title="Categorías" />} />
-              <Route path="/productos" element={<ModulePage title="Productos" />} />
+              <Route path="/categorias" element={<CategoriesPage />} />
+              <Route path="/productos" element={<ProductsPage />} />
 
+              <Route path="/movimientos-inventario" element={<Navigate to="/ajustes-inventario" replace />} />
               <Route path="/ajustes-inventario" element={<InventoryAdjustmentsPage />} />
               <Route path="/reportes" element={<ReportsPage />} />
             </Route>

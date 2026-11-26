@@ -40,7 +40,8 @@
   font-weight: 600;
 }
 
-.auth-field input {
+.auth-field input,
+.auth-field select {
   padding: 0.625rem 0.875rem;
   font: inherit;
   font-weight: 400;
@@ -50,7 +51,8 @@
   border-radius: 8px;
 }
 
-.auth-field input:focus {
+.auth-field input:focus,
+.auth-field select:focus {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(15, 92, 110, 0.15);

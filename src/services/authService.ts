@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { AuthSession, LoginCredentials } from "../types/auth";
+import type { AuthSession, LoginCredentials, RegisterAccount } from "../types/auth";
 import { apiClient } from "./apiClient";
 import { saveSession } from "./authSession";
 
@@ -14,9 +14,13 @@ const readApiError = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
-const requestSession = async (path: string, credentials: LoginCredentials, fallback: string): Promise<AuthSession> => {
+const requestSession = async (
+  path: string,
+  body: LoginCredentials | RegisterAccount,
+  fallback: string,
+): Promise<AuthSession> => {
   try {
-    const response = await apiClient.post<AuthSession>(path, credentials);
+    const response = await apiClient.post<AuthSession>(path, body);
     saveSession(response.data);
     return response.data;
   } catch (error) {
@@ -27,5 +31,5 @@ const requestSession = async (path: string, credentials: LoginCredentials, fallb
 export const login = (credentials: LoginCredentials): Promise<AuthSession> =>
   requestSession("/auth/login", credentials, "No se pudo iniciar sesión");
 
-export const register = (credentials: LoginCredentials): Promise<AuthSession> =>
-  requestSession("/auth/register", credentials, "No se pudo registrar el usuario");
+export const register = (account: RegisterAccount): Promise<AuthSession> =>
+  requestSession("/auth/register", account, "No se pudo registrar el usuario");

@@ -11,7 +11,6 @@ import {
   HorizontaLDots,
   ListIcon,
   PieChartIcon,
-  TimeIcon,
   UserCircleIcon,
 } from "../../assets/icons";
 import { useSidebar } from "../context/SidebarContext";
@@ -53,10 +52,9 @@ const navItems: NavItem[] = [
     path: "/productos",
   },
   {
-    icon: <TimeIcon />,
-    name: "Movimientos",
-    path: "/movimientos-inventario",
-
+    icon: <BoxIconLine />,
+    name: "Ajustes",
+    path: "/ajustes-inventario",
   },
   {
     icon: <PieChartIcon />,

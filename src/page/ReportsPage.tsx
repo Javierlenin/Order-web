@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import "./UsersPage.css";
 import "./ReportsPage.css";
 import "../components/UserCard.css";
 import { ReportList } from "../components/ReportList";
+import { getProducts } from "../services/productService";
 import { getProductStockReport } from "../services/reportService";
+import type { Product } from "../types/product";
 import { STOCK_MOVEMENT_TYPES, type ProductStockReport, type StockMovementType } from "../types/report";
 
 const TYPE_LABEL: Record<StockMovementType, string> = {
@@ -13,6 +15,9 @@ const TYPE_LABEL: Record<StockMovementType, string> = {
 };
 
 export const ReportsPage = () => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productsLoaded, setProductsLoaded] = useState(false);
+  const [productQuery, setProductQuery] = useState("");
   const [productId, setProductId] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -21,14 +26,44 @@ export const ReportsPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setProducts(await getProducts());
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "No se logró cargar los productos. Intente de nuevo más tarde",
+        );
+      } finally {
+        setProductsLoaded(true);
+      }
+    };
+
+    loadProducts();
+  }, []);
+
+  const normalizedQuery = productQuery.trim().toLowerCase();
+  const visibleProducts = products.filter((product) => {
+    const matches = `${product.codeProduct} ${product.name}`.toLowerCase().includes(normalizedQuery);
+    return matches || String(product.id) === productId;
+  });
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const selectedProductId = Number(productId);
+
+    if (!Number.isInteger(selectedProductId) || selectedProductId <= 0) {
+      setReport(null);
+      setErrorMessage("Seleccione un producto");
+      return;
+    }
+
     setErrorMessage("");
     setIsLoading(true);
 
     try {
       setReport(
-        await getProductStockReport(Number(productId), {
+        await getProductStockReport(selectedProductId, {
           from: from || undefined,
           to: to || undefined,
           type: type || undefined,
@@ -75,15 +110,30 @@ export const ReportsPage = () => {
       </div>
       <form className="reports-filters" onSubmit={handleSubmit}>
         <label className="reports-field">
-          Producto
+          Buscar producto
           <input
-            type="number"
-            min="1"
+            type="search"
+            name="productQuery"
+            value={productQuery}
+            onChange={(event) => setProductQuery(event.target.value)}
+            placeholder="Código o nombre"
+          />
+        </label>
+        <label className="reports-field">
+          Producto
+          <select
             name="productId"
             value={productId}
             onChange={(event) => setProductId(event.target.value)}
             required
-          />
+          >
+            <option value="">Seleccione</option>
+            {visibleProducts.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.codeProduct} · {product.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="reports-field">
           Desde
@@ -108,10 +158,13 @@ export const ReportsPage = () => {
             ))}
           </select>
         </label>
-        <button className="reports-submit" type="submit" disabled={isLoading}>
+        <button className="reports-submit" type="submit" disabled={isLoading || products.length === 0}>
           Consultar
         </button>
       </form>
+      {productsLoaded && products.length === 0 && !errorMessage && (
+        <p className="users-page-empty">No hay productos registrados.</p>
+      )}
       {report && !errorMessage && (
         <div className="reports-product">
           <h3 className="user-card-name">
