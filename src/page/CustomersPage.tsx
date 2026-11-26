@@ -2,10 +2,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import "./UsersPage.css";
 import "../components/UserList.css";
 import "../components/UserCard.css";
+import { CardActions } from "../components/CardActions";
 import { SearchBar } from "../components/SearchBar";
 import { Modal } from "../components/ui/modal";
 import { useModal } from "../components/hooks/useModal";
-import { createCustomer, getCustomers } from "../services/customerService";
+import { createCustomer, deleteCustomer, getCustomers, updateCustomer } from "../services/customerService";
 import type { Customer } from "../types/customer";
 
 export const CustomersPage = () => {
@@ -13,6 +14,7 @@ export const CustomersPage = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [actionError, setActionError] = useState("");
   const [identification, setIdentification] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -21,6 +23,8 @@ export const CustomersPage = () => {
   const [status, setStatus] = useState(true);
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const { isOpen, openModal, closeModal } = useModal();
 
   useEffect(() => {
@@ -47,6 +51,7 @@ export const CustomersPage = () => {
   );
 
   const resetForm = () => {
+    setEditingCustomer(null);
     setIdentification("");
     setName("");
     setEmail("");
@@ -61,7 +66,25 @@ export const CustomersPage = () => {
     closeModal();
   };
 
-  const handleCreateCustomer = async (event: FormEvent<HTMLFormElement>) => {
+  const openCreate = () => {
+    resetForm();
+    openModal();
+  };
+
+  const openEdit = (customer: Customer) => {
+    setEditingCustomer(customer);
+    setIdentification(customer.identification);
+    setName(customer.name);
+    setEmail(customer.email ?? "");
+    setPhone(customer.phone ?? "");
+    setAddress(customer.address ?? "");
+    setStatus(customer.status);
+    setFormError("");
+    setActionError("");
+    openModal();
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedIdentification = identification.trim();
     const trimmedName = name.trim();
@@ -79,21 +102,51 @@ export const CustomersPage = () => {
     setFormError("");
     setIsSaving(true);
 
+    const payload = {
+      identification: trimmedIdentification,
+      name: trimmedName,
+      email: email.trim() || null,
+      phone: phone.trim() || null,
+      address: address.trim() || null,
+      status,
+    };
+
     try {
-      const createdCustomer = await createCustomer({
-        identification: trimmedIdentification,
-        name: trimmedName,
-        email: email.trim() || null,
-        phone: phone.trim() || null,
-        address: address.trim() || null,
-        status,
-      });
-      setCustomers((currentCustomers) => [createdCustomer, ...currentCustomers]);
+      if (editingCustomer) {
+        const updatedCustomer = await updateCustomer(editingCustomer.id, payload);
+        setCustomers((currentCustomers) =>
+          currentCustomers.map((customer) => (customer.id === updatedCustomer.id ? updatedCustomer : customer)),
+        );
+      } else {
+        const createdCustomer = await createCustomer(payload);
+        setCustomers((currentCustomers) => [createdCustomer, ...currentCustomers]);
+      }
       handleClose();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "No se logró registrar el cliente");
+      setFormError(error instanceof Error ? error.message : "No se logró guardar el cliente");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (customer: Customer) => {
+    if (!window.confirm(`¿Eliminar el cliente ${customer.name}?`)) {
+      return;
+    }
+
+    setActionError("");
+    setDeletingId(customer.id);
+
+    try {
+      await deleteCustomer(customer.id);
+      setCustomers((currentCustomers) => currentCustomers.filter((current) => current.id !== customer.id));
+      if (editingCustomer?.id === customer.id) {
+        handleClose();
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No se logró eliminar el cliente");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -129,6 +182,12 @@ export const CustomersPage = () => {
             <p className="user-card-email">{customer.address || "Sin dirección"}</p>
             <div className="user-card-footer">
               <span className="user-card-status">{customer.status ? "Activo" : "Inactivo"}</span>
+              <CardActions
+                label={customer.name}
+                busy={deletingId === customer.id}
+                onEdit={() => openEdit(customer)}
+                onDelete={() => handleDelete(customer)}
+              />
             </div>
           </article>
         ))}
@@ -148,7 +207,7 @@ export const CustomersPage = () => {
             </p>
           )}
         </div>
-        <button type="button" className="users-page-new" onClick={openModal}>
+        <button type="button" className="users-page-new" onClick={openCreate}>
           Nuevo cliente
         </button>
       </div>
@@ -158,10 +217,15 @@ export const CustomersPage = () => {
         placeholder="Buscar por identificación, nombre o teléfono"
         label="Buscar clientes"
       />
+      {actionError && (
+        <p className="users-page-error" role="alert">
+          {actionError}
+        </p>
+      )}
       {renderContent()}
       <Modal isOpen={isOpen} onClose={handleClose} className="record-modal">
-        <form className="record-form" onSubmit={handleCreateCustomer}>
-          <h3 className="record-form-title">Nuevo cliente</h3>
+        <form className="record-form" onSubmit={handleSubmit}>
+          <h3 className="record-form-title">{editingCustomer ? "Editar cliente" : "Nuevo cliente"}</h3>
           <label>
             Identificación
             <input
