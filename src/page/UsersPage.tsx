@@ -5,7 +5,7 @@ import { SearchBar } from "../components/SearchBar";
 import { UserList } from "../components/UserList";
 import type { User } from "../types/user";
 import { clearSession } from "../services/authSession";
-import { createUser, getUsers } from "../services/userService";
+import { createUser, deleteUser, getUsers, updateUser } from "../services/userService";
 import { getRoles } from "../services/roleService";
 import type { Role } from "../types/role";
 import { Modal } from "../components/ui/modal";
@@ -17,14 +17,18 @@ export const UsersPage = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [actionError, setActionError] = useState("");
   const [roles, setRoles] = useState<Role[]>([]);
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const { isOpen, openModal, closeModal } = useModal();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [roleId, setRoleId] = useState("");
+  const [status, setStatus] = useState(true);
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -32,9 +36,9 @@ export const UsersPage = () => {
         const [loadedUsers, loadedRoles] = await Promise.all([getUsers(), getRoles()]);
         setUsers(loadedUsers);
         setRoles(loadedRoles);
-      } catch {
+      } catch (error) {
         setErrorMessage(
-          "No se logró cargar los usuarios. Intente de nuevo más tarde",
+          error instanceof Error ? error.message : "No se logró cargar los usuarios. Intente de nuevo más tarde",
         );
       } finally {
         setIsLoading(false);
@@ -52,10 +56,12 @@ export const UsersPage = () => {
   );
 
   const resetForm = () => {
+    setEditingUser(null);
     setName("");
     setEmail("");
     setPassword("");
     setRoleId("");
+    setStatus(true);
     setFormError("");
   };
 
@@ -64,27 +70,74 @@ export const UsersPage = () => {
     closeModal();
   };
 
-  const handleCreateUser = async (event: FormEvent<HTMLFormElement>) => {
+  const openCreate = () => {
+    resetForm();
+    openModal();
+  };
+
+  const openEdit = (user: User) => {
+    setEditingUser(user);
+    setName(user.name);
+    setEmail(user.email);
+    setPassword("");
+    setRoleId(String(user.roleId));
+    setStatus(user.status);
+    setFormError("");
+    setActionError("");
+    openModal();
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError("");
     setIsSaving(true);
 
+    const payload = {
+      name: name.trim(),
+      email: email.trim(),
+      password,
+      roleId: Number(roleId),
+      status,
+    };
+
     try {
-      const createdUser = await createUser({
-        name: name.trim(),
-        email: email.trim(),
-        password,
-        roleId: Number(roleId),
-        status: true,
-      });
-      setUsers((currentUsers) => [createdUser, ...currentUsers]);
+      if (editingUser) {
+        const updatedUser = await updateUser(editingUser.id, payload);
+        setUsers((currentUsers) => currentUsers.map((user) => (user.id === updatedUser.id ? updatedUser : user)));
+      } else {
+        const createdUser = await createUser(payload);
+        setUsers((currentUsers) => [createdUser, ...currentUsers]);
+      }
       handleClose();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "No se pudo crear el usuario.");
+      setFormError(error instanceof Error ? error.message : "No se pudo guardar el usuario.");
     } finally {
       setIsSaving(false);
     }
   };
+
+  const handleDelete = async (user: User) => {
+    if (!window.confirm(`¿Eliminar el usuario ${user.name}?`)) {
+      return;
+    }
+
+    setActionError("");
+    setDeletingId(user.id);
+
+    try {
+      await deleteUser(user.id);
+      setUsers((currentUsers) => currentUsers.filter((current) => current.id !== user.id));
+      if (editingUser?.id === user.id) {
+        handleClose();
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No se logró eliminar el usuario");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const visibleRoles = roles.filter((role) => role.status || String(role.id) === roleId);
 
   const renderContent = () => {
     if (isLoading) {
@@ -100,7 +153,14 @@ export const UsersPage = () => {
     if (filteredUsers.length === 0) {
         return <p className="users-page-empty">No se encontraron usuarios con ese término.</p>
     }
-    return <UserList users={filteredUsers} />
+    return (
+      <UserList
+        users={filteredUsers}
+        deletingId={deletingId}
+        onEdit={openEdit}
+        onDelete={handleDelete}
+      />
+    );
   };
 
   return (
@@ -116,7 +176,7 @@ export const UsersPage = () => {
           )}
         </div>
         <div className="users-page-actions">
-          <button type="button" className="users-page-new" onClick={openModal}>
+          <button type="button" className="users-page-new" onClick={openCreate}>
             Nuevo usuario
           </button>
           <button
@@ -132,13 +192,18 @@ export const UsersPage = () => {
         </div>
       </div>
       <SearchBar value={searchTerm} onChange={setSearchTerm} />
+      {actionError && (
+        <p className="users-page-error" role="alert">
+          {actionError}
+        </p>
+      )}
       {renderContent()}
       <Modal isOpen={isOpen} onClose={handleClose} className="record-modal">
-        <form className="record-form" onSubmit={handleCreateUser}>
-          <h3 className="record-form-title">Nuevo usuario</h3>
+        <form className="record-form" onSubmit={handleSubmit}>
+          <h3 className="record-form-title">{editingUser ? "Editar usuario" : "Nuevo usuario"}</h3>
           <label>
             Nombre
-            <input value={name} onChange={(event) => setName(event.target.value)} required />
+            <input value={name} onChange={(event) => setName(event.target.value)} required autoFocus />
           </label>
           <label>
             Correo electrónico
@@ -148,13 +213,21 @@ export const UsersPage = () => {
             Contraseña
             <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} />
           </label>
+          {editingUser && <p className="user-card-email">La contraseña se reemplaza al guardar.</p>}
           <label>
             Rol
             <select value={roleId} onChange={(event) => setRoleId(event.target.value)} required>
               <option value="">Seleccione un rol</option>
-              {roles.filter((role) => role.status).map((role) => (
+              {visibleRoles.map((role) => (
                 <option key={role.id} value={role.id}>{role.name}</option>
               ))}
+            </select>
+          </label>
+          <label>
+            Estado
+            <select value={status ? "true" : "false"} onChange={(event) => setStatus(event.target.value === "true")}>
+              <option value="true">Activo</option>
+              <option value="false">Inactivo</option>
             </select>
           </label>
           {formError && <p className="users-page-error" role="alert">{formError}</p>}
