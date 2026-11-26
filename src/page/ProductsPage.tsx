@@ -2,11 +2,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import "./UsersPage.css";
 import "../components/UserList.css";
 import "../components/UserCard.css";
+import { CardActions } from "../components/CardActions";
 import { SearchBar } from "../components/SearchBar";
 import { Modal } from "../components/ui/modal";
 import { useModal } from "../components/hooks/useModal";
 import { getCategories } from "../services/categoryService";
-import { createProduct, getProducts } from "../services/productService";
+import { createProduct, deleteProduct, getProducts, updateProduct } from "../services/productService";
 import type { Category } from "../types/category";
 import type { Product } from "../types/product";
 
@@ -27,12 +28,15 @@ const parsePrice = (value: string): number | null => {
   return price;
 };
 
+const formatPrice = (value: number): string => value.toFixed(2);
+
 export const ProductsPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [actionError, setActionError] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [codeProduct, setCodeProduct] = useState("");
   const [name, setName] = useState("");
@@ -41,6 +45,8 @@ export const ProductsPage = () => {
   const [status, setStatus] = useState(true);
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const { isOpen, openModal, closeModal } = useModal();
 
   useEffect(() => {
@@ -61,7 +67,8 @@ export const ProductsPage = () => {
     loadProducts();
   }, []);
 
-  const activeCategories = categories.filter((category) => category.status);
+  const selectedCategoryId = Number(categoryId);
+  const categoryOptions = categories.filter((category) => category.status || category.id === selectedCategoryId);
   const normalizedTerm = searchTerm.trim().toLowerCase();
   const filteredProducts = products.filter((product) =>
     `${product.codeProduct} ${product.name} ${product.categoryName} ${product.description ?? ""}`
@@ -70,6 +77,7 @@ export const ProductsPage = () => {
   );
 
   const resetForm = () => {
+    setEditingProduct(null);
     setCategoryId("");
     setCodeProduct("");
     setName("");
@@ -84,14 +92,32 @@ export const ProductsPage = () => {
     closeModal();
   };
 
-  const handleCreateProduct = async (event: FormEvent<HTMLFormElement>) => {
+  const openCreate = () => {
+    resetForm();
+    openModal();
+  };
+
+  const openEdit = (product: Product) => {
+    setEditingProduct(product);
+    setCategoryId(String(product.categoryId));
+    setCodeProduct(product.codeProduct);
+    setName(product.name);
+    setDescription(product.description ?? "");
+    setPrice(formatPrice(product.price));
+    setStatus(product.status);
+    setFormError("");
+    setActionError("");
+    openModal();
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const selectedCategoryId = Number(categoryId);
+    const parsedCategoryId = Number(categoryId);
     const trimmedCode = codeProduct.trim();
     const trimmedName = name.trim();
     const parsedPrice = parsePrice(price);
 
-    if (!Number.isInteger(selectedCategoryId) || selectedCategoryId <= 0) {
+    if (!Number.isInteger(parsedCategoryId) || parsedCategoryId <= 0) {
       setFormError("La categoría del producto no es válida");
       return;
     }
@@ -114,21 +140,51 @@ export const ProductsPage = () => {
     setFormError("");
     setIsSaving(true);
 
+    const payload = {
+      categoryId: parsedCategoryId,
+      codeProduct: trimmedCode,
+      name: trimmedName,
+      description: description.trim() || null,
+      price: parsedPrice,
+      status,
+    };
+
     try {
-      const createdProduct = await createProduct({
-        categoryId: selectedCategoryId,
-        codeProduct: trimmedCode,
-        name: trimmedName,
-        description: description.trim() || null,
-        price: parsedPrice,
-        status,
-      });
-      setProducts((currentProducts) => [createdProduct, ...currentProducts]);
+      if (editingProduct) {
+        const updatedProduct = await updateProduct(editingProduct.id, payload);
+        setProducts((currentProducts) =>
+          currentProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product)),
+        );
+      } else {
+        const createdProduct = await createProduct(payload);
+        setProducts((currentProducts) => [createdProduct, ...currentProducts]);
+      }
       handleClose();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "No se logró registrar el producto");
+      setFormError(error instanceof Error ? error.message : "No se logró guardar el producto");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (product: Product) => {
+    if (!window.confirm(`¿Eliminar el producto ${product.name}?`)) {
+      return;
+    }
+
+    setActionError("");
+    setDeletingId(product.id);
+
+    try {
+      await deleteProduct(product.id);
+      setProducts((currentProducts) => currentProducts.filter((current) => current.id !== product.id));
+      if (editingProduct?.id === product.id) {
+        handleClose();
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No se logró eliminar el producto");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -167,6 +223,12 @@ export const ProductsPage = () => {
             </p>
             <div className="user-card-footer">
               <span className="user-card-status">{product.status ? "Activo" : "Inactivo"}</span>
+              <CardActions
+                label={product.name}
+                busy={deletingId === product.id}
+                onEdit={() => openEdit(product)}
+                onDelete={() => handleDelete(product)}
+              />
             </div>
           </article>
         ))}
@@ -186,7 +248,7 @@ export const ProductsPage = () => {
             </p>
           )}
         </div>
-        <button type="button" className="users-page-new" onClick={openModal} disabled={isLoading || Boolean(errorMessage)}>
+        <button type="button" className="users-page-new" onClick={openCreate} disabled={isLoading || Boolean(errorMessage)}>
           Nuevo producto
         </button>
       </div>
@@ -196,22 +258,27 @@ export const ProductsPage = () => {
         placeholder="Buscar por código, nombre o categoría"
         label="Buscar productos"
       />
+      {actionError && (
+        <p className="users-page-error" role="alert">
+          {actionError}
+        </p>
+      )}
       {renderContent()}
       <Modal isOpen={isOpen} onClose={handleClose} className="record-modal">
-        <form className="record-form" onSubmit={handleCreateProduct}>
-          <h3 className="record-form-title">Nuevo producto</h3>
+        <form className="record-form" onSubmit={handleSubmit}>
+          <h3 className="record-form-title">{editingProduct ? "Editar producto" : "Nuevo producto"}</h3>
           <label>
             Categoría
             <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} required autoFocus>
               <option value="">Seleccione</option>
-              {activeCategories.map((category) => (
+              {categoryOptions.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
                 </option>
               ))}
             </select>
           </label>
-          {activeCategories.length === 0 && (
+          {categoryOptions.length === 0 && (
             <p className="users-page-empty">Registre una categoría activa antes de crear el producto.</p>
           )}
           <label>
@@ -253,7 +320,9 @@ export const ProductsPage = () => {
               <option value="false">Inactivo</option>
             </select>
           </label>
-          <p className="user-card-email">El stock inicial es cero. Las existencias se cargan en Ajustes.</p>
+          {!editingProduct && (
+            <p className="user-card-email">El stock inicial es cero. Las existencias se cargan en Ajustes.</p>
+          )}
           {formError && (
             <p className="users-page-error" role="alert">
               {formError}
@@ -263,7 +332,7 @@ export const ProductsPage = () => {
             <button type="button" className="users-page-logout" onClick={handleClose}>
               Cancelar
             </button>
-            <button type="submit" className="users-page-new" disabled={isSaving || activeCategories.length === 0}>
+            <button type="submit" className="users-page-new" disabled={isSaving || categoryOptions.length === 0}>
               {isSaving ? "Guardando..." : "Guardar"}
             </button>
           </div>

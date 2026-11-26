@@ -30,3 +30,20 @@ export const createProduct = async (product: NewProduct): Promise<Product> => {
     throw new Error(readApiError(error, "No se logró registrar el producto"));
   }
 };
+
+export const updateProduct = async (id: number, product: NewProduct): Promise<Product> => {
+  try {
+    const response = await apiClient.put<Product>(`/products/${id}`, product);
+    return response.data;
+  } catch (error) {
+    throw new Error(readApiError(error, "No se logró actualizar el producto"));
+  }
+};
+
+export const deleteProduct = async (id: number): Promise<void> => {
+  try {
+    await apiClient.delete(`/products/${id}`);
+  } catch (error) {
+    throw new Error(readApiError(error, "No se logró eliminar el producto"));
+  }
+};
