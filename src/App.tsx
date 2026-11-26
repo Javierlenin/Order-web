@@ -29,6 +29,7 @@ export default function App() {
               <Route path="/categorias" element={<ModulePage title="Categorías" />} />
               <Route path="/productos" element={<ModulePage title="Productos" />} />
 
+              <Route path="/movimientos-inventario" element={<Navigate to="/ajustes-inventario" replace />} />
               <Route path="/ajustes-inventario" element={<InventoryAdjustmentsPage />} />
               <Route path="/reportes" element={<ReportsPage />} />
             </Route>

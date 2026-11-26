@@ -1,11 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import axios from "axios";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router";
 import "./UsersPage.css";
-import "./ReportsPage.css";
-import "./InventoryAdjustmentsPage.css";
-import "../components/UserList.css";
-import "../components/UserCard.css";
+import "./OrdersPage.css";
 import { SearchBar } from "../components/SearchBar";
-import { getSession } from "../services/authSession";
+import { clearSession, getSession } from "../services/authSession";
 import { createInventoryAdjustment, getInventoryAdjustments } from "../services/inventoryAdjustmentService";
 import { getProducts } from "../services/productService";
 import { getUsers } from "../services/userService";
@@ -13,6 +12,7 @@ import {
   ADJUSTMENT_TYPES,
   type AdjustmentType,
   type InventoryAdjustment,
+  type NewInventoryAdjustment,
 } from "../types/inventoryAdjustment";
 import type { Product } from "../types/product";
 import type { User } from "../types/user";
@@ -22,158 +22,145 @@ const TYPE_LABEL: Record<AdjustmentType, string> = {
   SALIDA: "Salida",
 };
 
+const formatDate = (value: string): string => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("es-EC", { dateStyle: "short", timeStyle: "short" });
+};
+
+const parseQuantity = (value: string): number | null => {
+  if (!/^[1-9]\d*$/.test(value.trim())) {
+    return null;
+  }
+
+  const quantity = Number(value);
+  return Number.isSafeInteger(quantity) ? quantity : null;
+};
+
+const isUnauthorized = (error: unknown): boolean => error instanceof Error && error.message === "No autorizado";
+
 interface DraftLine {
   key: number;
   productId: string;
   quantity: string;
 }
 
-const formatDateTime = (value: string | Date): string => {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
+interface AdjustmentForm {
+  adjustmentType: AdjustmentType;
+  userId: string;
+  reason: string;
+  lines: DraftLine[];
+}
+
+const buildAdjustment = (form: AdjustmentForm): NewInventoryAdjustment | string => {
+  const userId = Number(form.userId);
+
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return "Seleccione el usuario responsable";
   }
 
-  return date.toLocaleString("es");
+  const reason = form.reason.trim();
+  if (!reason) {
+    return "El motivo del ajuste es obligatorio";
+  }
+
+  if (reason.length > 500) {
+    return "El motivo del ajuste no puede superar 500 caracteres";
+  }
+
+  if (form.lines.length === 0) {
+    return "Debe registrar al menos un producto";
+  }
+
+  const productIds = new Set<number>();
+  const details: NewInventoryAdjustment["details"] = [];
+
+  for (const line of form.lines) {
+    const productId = Number(line.productId);
+
+    if (!Number.isInteger(productId) || productId <= 0) {
+      return "Seleccione el producto de cada línea";
+    }
+
+    const quantity = parseQuantity(line.quantity);
+    if (quantity === null) {
+      return "La cantidad del producto debe ser un entero mayor que cero";
+    }
+
+    if (productIds.has(productId)) {
+      return "El producto no puede repetirse en el ajuste";
+    }
+
+    productIds.add(productId);
+    details.push({ productId, quantity });
+  }
+
+  return {
+    userId,
+    adjustmentType: form.adjustmentType,
+    reason,
+    details,
+  };
 };
 
-const emptyLine = (key: number): DraftLine => ({ key, productId: "", quantity: "" });
-
-const isPositiveInteger = (value: number): boolean => Number.isInteger(value) && value > 0;
-
 export const InventoryAdjustmentsPage = () => {
+  const navigate = useNavigate();
+  const nextKey = useRef(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [adjustments, setAdjustments] = useState<InventoryAdjustment[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [isListLoading, setIsListLoading] = useState(true);
-  const [isCatalogLoading, setIsCatalogLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [listError, setListError] = useState("");
-  const [catalogError, setCatalogError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [form, setForm] = useState<AdjustmentForm | null>(null);
   const [formError, setFormError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  const [adjustmentType, setAdjustmentType] = useState<AdjustmentType>("INGRESO");
-  const [userId, setUserId] = useState(() => {
-    const sessionUserId = getSession()?.user.id;
-    return sessionUserId ? String(sessionUserId) : "";
-  });
-  const [reason, setReason] = useState("");
-  const [registeredAtLabel, setRegisteredAtLabel] = useState(() => formatDateTime(new Date()));
-  const [lines, setLines] = useState<DraftLine[]>([emptyLine(1)]);
-  const [nextKey, setNextKey] = useState(2);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const loadAdjustments = async () => {
-    setAdjustments(await getInventoryAdjustments());
-  };
+  const createLine = (productId = "", quantity = "1"): DraftLine => ({
+    key: nextKey.current++,
+    productId,
+    quantity,
+  });
 
   useEffect(() => {
     const load = async () => {
       try {
-        await loadAdjustments();
-        setListError("");
-      } catch (error) {
-        setListError(error instanceof Error ? error.message : "No se logró cargar los ajustes. Intente de nuevo más tarde");
-      } finally {
-        setIsListLoading(false);
-      }
+        const [nextAdjustments, nextUsers, nextProducts] = await Promise.all([
+          getInventoryAdjustments(),
+          getUsers().catch((error: unknown) => {
+            if (axios.isAxiosError(error) && error.response?.status === 401) {
+              throw new Error("No autorizado");
+            }
 
-      try {
-        const [userList, productList] = await Promise.all([getUsers(), getProducts()]);
-        setUsers(userList);
-        setProducts(productList);
-        setCatalogError("");
+            throw new Error("No se logró cargar los usuarios. Intente de nuevo más tarde");
+          }),
+          getProducts(),
+        ]);
+        setAdjustments(nextAdjustments);
+        setUsers(nextUsers);
+        setProducts(nextProducts);
       } catch (error) {
-        setCatalogError(
-          error instanceof Error ? error.message : "No se logró cargar usuarios y productos. Intente de nuevo más tarde",
+        if (isUnauthorized(error)) {
+          clearSession();
+          navigate("/signin", { replace: true });
+          return;
+        }
+
+        setErrorMessage(
+          error instanceof Error ? error.message : "No se logró cargar los ajustes. Intente de nuevo más tarde",
         );
       } finally {
-        setIsCatalogLoading(false);
+        setIsLoading(false);
       }
     };
 
     load();
-  }, []);
+  }, [navigate]);
 
-  const productsById = new Map(products.map((product) => [String(product.id), product]));
-  const selectedProductIds = new Set(lines.map((line) => line.productId).filter(Boolean));
-
-  const lineExceedsStock = (line: DraftLine): boolean => {
-    if (adjustmentType !== "SALIDA") {
-      return false;
-    }
-
-    const product = productsById.get(line.productId);
-    const quantity = Number(line.quantity);
-    return product !== undefined && isPositiveInteger(quantity) && quantity > product.stock;
-  };
-
-  const hasStockError = lines.some(lineExceedsStock);
-
-  const updateLine = (key: number, patch: Partial<DraftLine>) => {
-    setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
-  };
-
-  const addLine = () => {
-    setLines((current) => [...current, emptyLine(nextKey)]);
-    setNextKey((current) => current + 1);
-  };
-
-  const removeLine = (key: number) => {
-    setLines((current) => current.filter((line) => line.key !== key));
-  };
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setFormError("");
-    setSuccessMessage("");
-
-    if (hasStockError) {
-      setFormError("El ajuste dejaría el stock en negativo");
-      return;
-    }
-
-    const details = lines.map((line) => ({
-      productId: Number(line.productId),
-      quantity: Number(line.quantity),
-    }));
-
-    if (details.some((detail) => !isPositiveInteger(detail.productId) || !isPositiveInteger(detail.quantity))) {
-      setFormError("Seleccione un producto y una cantidad entera mayor que cero en cada línea");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const created = await createInventoryAdjustment({
-        userId: Number(userId),
-        adjustmentType,
-        reason: reason.trim(),
-        details,
-      });
-      setSuccessMessage(`Ajuste registrado el ${formatDateTime(created.createdAt)}.`);
-      setReason("");
-      setLines([emptyLine(nextKey)]);
-      setNextKey((current) => current + 1);
-      setRegisteredAtLabel(formatDateTime(new Date()));
-      setAdjustments((current) => [created, ...current.filter((adjustment) => adjustment.id !== created.id)]);
-      try {
-        setProducts(await getProducts());
-      } catch (error) {
-        setFormError(
-          error instanceof Error
-            ? `El ajuste se registró, pero no se actualizó el stock en pantalla. ${error.message}`
-            : "El ajuste se registró, pero no se actualizó el stock en pantalla.",
-        );
-      }
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "No se logró registrar el ajuste. Intente de nuevo más tarde");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
+  const activeUsers = users.filter((user) => user.status);
   const normalizedTerm = searchTerm.trim().toLowerCase();
   const filteredAdjustments = adjustments.filter((adjustment) => {
     const productText = adjustment.details.map((detail) => `${detail.codeProduct} ${detail.productName}`).join(" ");
@@ -182,15 +169,92 @@ export const InventoryAdjustmentsPage = () => {
       .includes(normalizedTerm);
   });
 
+  const openCreate = async () => {
+    setFormError("");
+    const sessionUserId = getSession()?.user.id;
+
+    try {
+      setProducts(await getProducts());
+    } catch (error) {
+      if (isUnauthorized(error)) {
+        clearSession();
+        navigate("/signin", { replace: true });
+        return;
+      }
+
+      setFormError(
+        error instanceof Error ? error.message : "No se logró cargar los productos. Intente de nuevo más tarde",
+      );
+    }
+
+    setForm({
+      adjustmentType: "INGRESO",
+      userId: activeUsers.some((user) => user.id === sessionUserId) ? String(sessionUserId) : "",
+      reason: "",
+      lines: [createLine()],
+    });
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!form) {
+      return;
+    }
+
+    const payload = buildAdjustment(form);
+    if (typeof payload === "string") {
+      setFormError(payload);
+      return;
+    }
+
+    if (payload.adjustmentType === "SALIDA") {
+      const shortage = payload.details.find((detail) => {
+        const product = products.find((item) => item.id === detail.productId);
+        return product !== undefined && detail.quantity > product.stock;
+      });
+
+      if (shortage) {
+        const product = products.find((item) => item.id === shortage.productId);
+        setFormError(
+          product
+            ? `El ajuste dejaría el stock en negativo. Disponible de ${product.codeProduct}: ${product.stock}`
+            : "El ajuste dejaría el stock en negativo",
+        );
+        return;
+      }
+    }
+
+    setFormError("");
+    setIsSaving(true);
+
+    try {
+      await createInventoryAdjustment(payload);
+      const [nextAdjustments, nextProducts] = await Promise.all([getInventoryAdjustments(), getProducts()]);
+      setAdjustments(nextAdjustments);
+      setProducts(nextProducts);
+      setForm(null);
+    } catch (error) {
+      if (isUnauthorized(error)) {
+        clearSession();
+        navigate("/signin", { replace: true });
+        return;
+      }
+
+      setFormError(error instanceof Error ? error.message : "No se logró registrar el ajuste. Intente de nuevo más tarde");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const renderAdjustments = () => {
-    if (isListLoading) {
+    if (isLoading) {
       return <p className="users-page-status">Cargando ajustes....</p>;
     }
 
-    if (listError) {
+    if (errorMessage) {
       return (
         <p className="users-page-status users-page-error" role="alert">
-          {listError}
+          {errorMessage}
         </p>
       );
     }
@@ -198,32 +262,48 @@ export const InventoryAdjustmentsPage = () => {
     if (filteredAdjustments.length === 0) {
       return (
         <p className="users-page-empty">
-          {adjustments.length === 0 ? "No hay ajustes de inventario." : "No se encontraron ajustes con ese término."}
+          {normalizedTerm ? "No se encontraron ajustes con ese término." : "No hay ajustes registrados."}
         </p>
       );
     }
 
-    return (
-      <div className="user-list">
-        {filteredAdjustments.map((adjustment) => (
-          <article key={adjustment.id} className="user-card">
-            <p className="user-card-email">{formatDateTime(adjustment.createdAt)}</p>
-            <h3 className="user-card-name">{TYPE_LABEL[adjustment.adjustmentType]}</h3>
-            <p className="user-card-email">{adjustment.reason || "Sin motivo"}</p>
-            <ul className="adjustment-detail-list">
+    return filteredAdjustments.map((adjustment) => (
+      <article key={adjustment.id} className="orders-card">
+        <div className="orders-card-header">
+          <h3>Ajuste {adjustment.id}</h3>
+          <span className="orders-status">{TYPE_LABEL[adjustment.adjustmentType]}</span>
+        </div>
+        <div className="orders-meta">
+          <span>Fecha {formatDate(adjustment.createdAt)}</span>
+          <span>Responsable {adjustment.userName}</span>
+        </div>
+        {adjustment.reason && <p className="orders-notes">{adjustment.reason}</p>}
+        <div className="orders-scroll">
+          <table className="orders-lines">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Stock anterior</th>
+                <th>Stock resultante</th>
+              </tr>
+            </thead>
+            <tbody>
               {adjustment.details.map((detail) => (
-                <li key={detail.id}>
-                  {detail.codeProduct} · {detail.productName}: {detail.quantity} ({detail.stockBefore} → {detail.stockAfter})
-                </li>
+                <tr key={detail.id}>
+                  <td>
+                    {detail.codeProduct} · {detail.productName}
+                  </td>
+                  <td>{detail.quantity}</td>
+                  <td>{detail.stockBefore}</td>
+                  <td>{detail.stockAfter}</td>
+                </tr>
               ))}
-            </ul>
-            <div className="user-card-footer">
-              <span className="user-card-role">{adjustment.userName}</span>
-            </div>
-          </article>
-        ))}
-      </div>
-    );
+            </tbody>
+          </table>
+        </div>
+      </article>
+    ));
   };
 
   return (
@@ -231,30 +311,39 @@ export const InventoryAdjustmentsPage = () => {
       <div className="users-page-header">
         <div className="users-page-heading">
           <h2 className="users-page-title">Ajustes de inventario</h2>
-          {!isListLoading && !listError && (
+          {!isLoading && !errorMessage && (
             <p className="users-page-count">
               {filteredAdjustments.length}
               {filteredAdjustments.length === 1 ? " resultado" : " resultados"}
             </p>
           )}
         </div>
+        <button
+          type="button"
+          className="orders-primary"
+          onClick={openCreate}
+          disabled={isLoading || Boolean(errorMessage) || form !== null}
+        >
+          Nuevo ajuste
+        </button>
       </div>
 
-      {isCatalogLoading ? (
-        <p className="users-page-status">Cargando productos....</p>
-      ) : catalogError ? (
-        <p className="users-page-status users-page-error" role="alert">
-          {catalogError}
-        </p>
-      ) : (
-        <form className="adjustment-form" onSubmit={handleSubmit}>
-          <div className="reports-filters">
-            <label className="reports-field">
+      <SearchBar
+        value={searchTerm}
+        onChange={setSearchTerm}
+        placeholder="Buscar por motivo, responsable o producto"
+        label="Buscar ajustes"
+      />
+
+      {form && (
+        <form className="orders-form" onSubmit={handleSubmit}>
+          <h3>Nuevo ajuste</h3>
+          <div className="orders-grid">
+            <label className="orders-field">
               Tipo de ajuste
               <select
-                name="adjustmentType"
-                value={adjustmentType}
-                onChange={(event) => setAdjustmentType(event.target.value as AdjustmentType)}
+                value={form.adjustmentType}
+                onChange={(event) => setForm({ ...form, adjustmentType: event.target.value as AdjustmentType })}
                 required
               >
                 {ADJUSTMENT_TYPES.map((type) => (
@@ -264,120 +353,147 @@ export const InventoryAdjustmentsPage = () => {
                 ))}
               </select>
             </label>
-            <label className="reports-field">
+            <label className="orders-field">
               Usuario responsable
-              <select name="userId" value={userId} onChange={(event) => setUserId(event.target.value)} required>
+              <select
+                value={form.userId}
+                onChange={(event) => setForm({ ...form, userId: event.target.value })}
+                required
+              >
                 <option value="">Seleccione</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                    {user.status ? "" : " (inactivo)"}
-                  </option>
-                ))}
+                {users
+                  .filter((user) => user.status || String(user.id) === form.userId)
+                  .map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                      {user.status ? "" : " (inactivo)"}
+                    </option>
+                  ))}
               </select>
             </label>
-            <label className="reports-field">
+            <label className="orders-field">
               Fecha y hora
-              <input type="text" name="registeredAt" value={registeredAtLabel} readOnly aria-readonly="true" />
+              <input readOnly value="Se asigna al guardar" />
             </label>
-            <label className="reports-field">
+            <label className="orders-field orders-field-wide">
               Motivo
-              <input
-                type="text"
-                name="reason"
-                value={reason}
+              <textarea
                 maxLength={500}
-                onChange={(event) => setReason(event.target.value)}
+                rows={3}
+                value={form.reason}
+                onChange={(event) => setForm({ ...form, reason: event.target.value })}
                 required
               />
             </label>
           </div>
 
-          <div className="adjustment-lines">
-            {lines.map((line) => {
-              const product = productsById.get(line.productId);
-              const exceedsStock = lineExceedsStock(line);
-              const options = products.filter(
-                (item) => String(item.id) === line.productId || !selectedProductIds.has(String(item.id)),
-              );
+          <div className="orders-scroll">
+            <table className="orders-lines">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Cantidad</th>
+                  <th>Stock</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {form.lines.map((line) => {
+                  const product = products.find((item) => item.id === Number(line.productId));
+                  const quantity = parseQuantity(line.quantity);
+                  const shortage =
+                    form.adjustmentType === "SALIDA" && product !== undefined && quantity !== null && quantity > product.stock;
+                  const taken = new Set(
+                    form.lines.filter((item) => item.key !== line.key && item.productId).map((item) => item.productId),
+                  );
 
-              return (
-                <div key={line.key} className="adjustment-line">
-                  <label className="reports-field">
-                    Producto
-                    <select
-                      name={`product-${line.key}`}
-                      value={line.productId}
-                      onChange={(event) => updateLine(line.key, { productId: event.target.value })}
-                      required
-                    >
-                      <option value="">Seleccione</option>
-                      {options.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.codeProduct} · {item.name}
-                          {item.status ? "" : " (inactivo)"}
-                        </option>
-                      ))}
-                    </select>
-                    {product && (
-                      <span className={exceedsStock ? "adjustment-stock adjustment-stock-error" : "adjustment-stock"}>
-                        {exceedsStock ? `Stock insuficiente. Disponible: ${product.stock}` : `Stock actual: ${product.stock}`}
-                      </span>
-                    )}
-                  </label>
-                  <label className="reports-field">
-                    Cantidad
-                    <input
-                      type="number"
-                      name={`quantity-${line.key}`}
-                      min="1"
-                      step="1"
-                      value={line.quantity}
-                      onChange={(event) => updateLine(line.key, { quantity: event.target.value })}
-                      required
-                    />
-                  </label>
-                  {lines.length > 1 ? (
-                    <button type="button" className="adjustment-remove" onClick={() => removeLine(line.key)}>
-                      Quitar
-                    </button>
-                  ) : (
-                    <span />
-                  )}
-                </div>
-              );
-            })}
+                  return (
+                    <tr key={line.key}>
+                      <td>
+                        <select
+                          aria-label="Producto"
+                          value={line.productId}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              lines: form.lines.map((item) =>
+                                item.key === line.key ? { ...item, productId: event.target.value } : item,
+                              ),
+                            })
+                          }
+                          required
+                        >
+                          <option value="">Seleccione</option>
+                          {products.map((item) => (
+                            <option key={item.id} value={item.id} disabled={taken.has(String(item.id))}>
+                              {item.codeProduct} · {item.name}
+                              {item.status ? "" : " (inactivo)"}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          aria-label="Cantidad"
+                          inputMode="numeric"
+                          value={line.quantity}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              lines: form.lines.map((item) =>
+                                item.key === line.key ? { ...item, quantity: event.target.value } : item,
+                              ),
+                            })
+                          }
+                          required
+                        />
+                      </td>
+                      <td className={shortage ? "orders-shortage" : undefined}>{product ? product.stock : "—"}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="orders-ghost"
+                          onClick={() => setForm({ ...form, lines: form.lines.filter((item) => item.key !== line.key) })}
+                        >
+                          Quitar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
+          <div className="orders-actions">
+            <button
+              type="button"
+              className="orders-secondary"
+              onClick={() => setForm({ ...form, lines: [...form.lines, createLine()] })}
+              disabled={products.length === 0 || form.lines.length >= products.length}
+            >
+              Agregar producto
+            </button>
+          </div>
+          <p className="orders-notes">
+            Un ingreso suma la cantidad al stock y una salida la resta. El servidor rechaza el ajuste si el stock quedaría en negativo.
+          </p>
           {formError && (
             <p className="users-page-status users-page-error" role="alert">
               {formError}
             </p>
           )}
-          {successMessage && <p className="users-page-status">{successMessage}</p>}
-
-          <div className="adjustment-actions">
-            <button
-              type="button"
-              className="adjustment-secondary"
-              onClick={addLine}
-              disabled={products.length === 0 || lines.length >= products.length}
-            >
-              Agregar producto
+          <div className="orders-actions">
+            <button type="submit" className="orders-primary" disabled={isSaving || products.length === 0}>
+              {isSaving ? "Guardando..." : "Guardar ajuste"}
             </button>
-            <button className="reports-submit" type="submit" disabled={isSubmitting || hasStockError || products.length === 0}>
-              {isSubmitting ? "Registrando..." : "Registrar ajuste"}
+            <button type="button" className="orders-secondary" onClick={() => setForm(null)} disabled={isSaving}>
+              Cerrar
             </button>
           </div>
         </form>
       )}
 
-      <SearchBar
-        value={searchTerm}
-        onChange={setSearchTerm}
-        placeholder="Buscar por motivo, usuario o producto"
-        label="Buscar ajustes"
-      />
       {renderAdjustments()}
     </section>
   );
