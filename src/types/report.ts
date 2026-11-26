@@ -25,6 +25,7 @@ export interface StockMovement {
   stockAfter: number;
   userId: number;
   userName: string;
+  description: string;
 }
 
 export interface ProductStockReport {

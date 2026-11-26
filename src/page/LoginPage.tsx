@@ -2,7 +2,7 @@ import { Navigate, useNavigate } from "react-router";
 import { AuthForm } from "../components/AuthForm";
 import { login } from "../services/authService";
 import { getSession } from "../services/authSession";
-import type { LoginCredentials } from "../types/auth";
+import type { RegisterAccount } from "../types/auth";
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -11,8 +11,8 @@ export const LoginPage = () => {
     return <Navigate to="/pedidos" replace />;
   }
 
-  const handleLogin = async (credentials: LoginCredentials) => {
-    await login(credentials);
+  const handleLogin = async ({ email, password }: RegisterAccount) => {
+    await login({ email, password });
     navigate("/pedidos", { replace: true });
   };
 

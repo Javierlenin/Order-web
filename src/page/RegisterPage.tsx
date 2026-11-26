@@ -2,7 +2,7 @@ import { Navigate, useNavigate } from "react-router";
 import { AuthForm } from "../components/AuthForm";
 import { register } from "../services/authService";
 import { getSession } from "../services/authSession";
-import type { LoginCredentials } from "../types/auth";
+import type { RegisterAccount } from "../types/auth";
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
@@ -11,16 +11,17 @@ export const RegisterPage = () => {
     return <Navigate to="/" replace />;
   }
 
-  const handleRegister = async (credentials: LoginCredentials) => {
-    await register(credentials);
+  const handleRegister = async (account: RegisterAccount) => {
+    await register(account);
     navigate("/", { replace: true });
   };
 
   return (
     <AuthForm
       title="Registrar usuario"
-      description="Crea una cuenta con tu correo y contraseña."
+      description="Crea tu cuenta. El rol Admin se asigna automáticamente."
       submitLabel="Registrar"
+      collectProfile
       alternateText="¿Ya tienes cuenta?"
       alternateLinkText="Iniciar sesión"
       alternateTo="/signin"
