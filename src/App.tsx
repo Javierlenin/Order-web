@@ -8,6 +8,7 @@ import { ScrollToTop } from "./components/common/ScrollToTop";
 import { UsersPage } from "./page/UsersPage";
 import { RolesPage } from "./page/RolesPage";
 import { ModulePage } from "./page/ModulePage";
+import { OrdersPage } from "./page/OrdersPage";
 import { ReportsPage } from "./page/ReportsPage";
 
 export default function App() {
@@ -22,7 +23,7 @@ export default function App() {
               <Route path="/users" element={<UsersPage />} />
               <Route path="/roles" element={<RolesPage />} />
               <Route path="/clientes" element={<ModulePage title="Clientes" />} />
-              <Route path="/pedidos" element={<ModulePage title="Pedidos" />} />
+              <Route path="/pedidos" element={<OrdersPage />} />
               <Route path="/categorias" element={<ModulePage title="Categorías" />} />
               <Route path="/productos" element={<ModulePage title="Productos" />} />
               <Route path="/reportes" element={<ReportsPage />} />
